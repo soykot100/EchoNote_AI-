@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoNote AI — Record once. Learn smarter.</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --brand-violet: #7C3AED;
+            --brand-sky: #0EA5E9;
+            --brand-dark: #0b0a1a;
+            --glass-bg: rgba(255,255,255,0.12);
+            --glass-border: rgba(255,255,255,0.18);
+            --glass-bg-dark: rgba(255,255,255,0.05);
+            --glass-border-dark: rgba(255,255,255,0.08);
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
+
+        /* Background blobs */
+        .blob {
+            position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.35; pointer-events: none; z-index: -1;
+        }
+        .blob-1 { width: 600px; height: 600px; background: var(--brand-violet); top: -150px; left: -100px; animation: blobFloat 18s ease-in-out infinite; }
+        .blob-2 { width: 500px; height: 500px; background: var(--brand-sky); bottom: -100px; right: -80px; animation: blobFloat 22s ease-in-out infinite reverse; }
+        .blob-3 { width: 350px; height: 350px; background: #F59E0B; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: blobFloat 15s ease-in-out infinite; opacity: 0.15; }
+        @keyframes blobFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(40px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+        .dark .blob { opacity: 0.2; }
+
+        /* Glass card */
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+        }
+        .dark .glass {
+            background: var(--glass-bg-dark);
+            border-color: var(--glass-border-dark);
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--brand-violet), var(--brand-sky));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Record button pulse */
+        .rec-pulse {
+            animation: recPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes recPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5); }
+            50% { box-shadow: 0 0 0 20px rgba(124, 58, 237, 0); }
+        }
+
+        /* Recording ring */
+        .rec-ring {
+            animation: recRing 1s linear infinite;
+        }
+        @keyframes recRing {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            100% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+        }
+
+        /* Progress step */
+        .step-dot { transition: all 0.4s ease; }
+        .step-dot.active { background: linear-gradient(135deg, var(--brand-violet), var(--brand-sky)); transform: scale(1.2); }
+        .step-dot.done { background: #10B981; }
+        .step-line { transition: width 0.5s ease; }
+
+        /* Tab pill */
+        .tab-pill {
+            transition: all 0.25s ease;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .tab-pill.active {
+            background: linear-gradient(135deg, var(--brand-violet), var(--brand-sky));
+            color: white;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+        .tab-pill:not(.active):hover {
+            background: rgba(124, 58, 237, 0.1);
+        }
+        .dark .tab-pill:not(.active):hover {
+            background: rgba(124, 58, 237, 0.2);
+        }
+
+        /* MCQ option */
+        .mcq-option {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .mcq-option:hover:not(.picked) { transform: translateY(-1px); border-color: var(--brand-violet); }
+        .mcq-option.correct { background: rgba(16, 185, 129, 0.15); border-color: #10B981; color: #10B981; }
+        .mcq-option.wrong { background: rgba(239, 68, 68, 0.15); border-color: #EF4444; color: #EF4444; }
+        .mcq-option.picked { pointer-events: none; }
+
+        /* Todo checkbox */
+        .todo-check:checked + .todo-text { text-decoration: line-through; opacity: 0.5; }
+
+        /* Toast */
+        .toast {
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+        }
+        @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+
+        /* Spinner */
+        .spinner {
+            border: 3px solid rgba(124, 58, 237, 0.2);
+            border-top-color: var(--brand-violet);
+            border-radius: 50%;
+            width: 28px; height: 28px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.3); border-radius: 3px; }
+
+        /* Fade sections */
+        .section-fade { transition: opacity 0.4s ease, transform 0.4s ease; }
+        .section-fade.hidden-section { opacity: 0; transform: translateY(20px); pointer-events: none; position: absolute; }
+
+        /* Upload drag hover */
+        .drag-over { border-color: var(--brand-violet) !important; background: rgba(124, 58, 237, 0.08) !important; }
+
+        /* Focus visible */
+        *:focus-visible { outline: 2px solid var(--brand-violet); outline-offset: 2px; border-radius: 4px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+
+        /* Navbar glass */
+        .nav-glass {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        .dark .nav-glass {
+            background: rgba(11,10,26,0.8);
+            border-bottom-color: rgba(255,255,255,0.06);
+        }
+
+        /* Smooth canvas */
+        .wave-canvas { image-rendering: auto; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-[#0b0a1a] text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+
+    <!-- Blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    <!-- Navbar -->
+    <nav class="nav-glass fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-3">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-sky-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                    <i class="fa-solid fa-microphone text-white text-sm"></i>
+                </div>
+                <span class="font-bold text-lg tracking-tight">EchoNote <span class="gradient-text">AI</span></span>
+            </div>
+            <button id="themeToggle" aria-label="Toggle dark mode"
+                class="w-10 h-10 rounded-full glass flex items-center justify-center hover:scale-110 transition-transform">
+                <i class="fa-solid fa-sun text-amber-400 dark:hidden"></i>
+                <i class="fa-solid fa-moon text-sky-300 hidden dark:block"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-24 pb-16">
+
+        <!-- Hero -->
+        <section id="heroSection" class="text-center mb-10 section-fade">
+            <div class="inline-block mb-4 px-4 py-1.5 rounded-full glass text-xs font-medium tracking-wide">
+                <i class="fa-solid fa-waveform-lines mr-1.5 text-violet-500"></i> AI-Powered Lecture Notes
+            </div>
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold mb-3 tracking-tight">
+                EchoNote <span class="gradient-text">AI</span>
+            </h1>
+            <p class="text-lg sm:text-xl text-slate-500 dark:text-slate-400 mb-2 font-light">
+                Record once. Learn smarter.
+            </p>
+            <p class="text-sm text-slate-400 dark:text-slate-500 max-w-lg mx-auto">
+                Record or paste a lecture and get an AI-generated transcript, key points, a to-do checklist, 10 MCQs, and a 60-second summary — completely free, runs in your browser.
+            </p>
+        </section>
+
+        <!-- Input Section -->
+        <section id="inputSection" class="section-fade mb-8">
+            <div class="grid md:grid-cols-2 gap-5 mb-6">
+                <!-- Record Card -->
+                <div class="glass p-6 sm:p-8 flex flex-col items-center justify-center min-h-[280px]">
+                    <div id="recordArea">
+                        <button id="recordBtn" aria-label="Start recording"
+                            class="w-24 h-24 rounded-full bg-gradient-to-br from-violet-600 to-sky-500 flex items-center justify-center shadow-xl shadow-violet-500/25 hover:scale-105 transition-transform rec-pulse mx-auto">
+                            <i class="fa-solid fa-microphone text-white text-3xl"></i>
+                        </button>
+                        <p id="recordTimer" class="font-mono text-sm text-slate-400 dark:text-slate-500 mt-4 text-center">Tap to record</p>
+                    </div>
+                    <div id="recordingUI" class="hidden text-center">
+                        <div class="w-24 h-24 rounded-full bg-red-500/20 border-2 border-red-500 flex items-center justify-center mx-auto rec-ring">
+                            <div class="w-8 h-8 bg-red-500 rounded-sm"></div>
+                        </div>
+                        <p id="liveTimer" class="font-mono text-2xl text-red-500 mt-4 font-bold">00:00</p>
+                        <canvas id="waveCanvas" class="wave-canvas mt-3 rounded-lg" width="280" height="50"></canvas>
+                        <button id="stopBtn" class="mt-3 px-5 py-2 rounded-full bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors">
+                            <i class="fa-solid fa-stop mr-1.5"></i> Stop Recording
+                        </button>
+                    </div>
+                    <p id="speechSupport" class="text-xs text-slate-400 mt-3 text-center hidden">
+                        <i class="fa-solid fa-circle-info mr-1"></i> Speech recognition works best in Chrome
+                    </p>
+                </div>
+
+                <!-- Upload / Paste Card -->
+                <div class="glass p-6 sm:p-8 flex flex-col min-h-[280px]">
+                    <div id="uploadZone"
+                        class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 flex flex-col items-center justify-center flex-1 transition-colors cursor-pointer hover:border-violet-400">
+                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500/20 to-sky-500/20 flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-cloud-arrow-up text-xl gradient-text"></i>
+                        </div>
+                        <p class="text-sm font-medium mb-1">Drop a text file here</p>
+                        <p class="text-xs text-slate-400 mb-3">.txt files supported</p>
+                        <label class="px-4 py-2 rounded-full glass text-sm font-medium hover:bg-violet-500/10 transition-colors cursor-pointer">
+                            Browse files
+                            <input type="file" id="fileInput" accept=".txt" class="hidden">
+                        </label>
+                    </div>
+                    <div class="mt-4 flex items-center gap-3">
+                        <div class="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+                        <span class="text-xs text-slate-400 font-medium">OR</span>
+                        <div class="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+                    </div>
+                    <button id="pasteBtn" class="mt-3 w-full py-2.5 rounded-xl glass text-sm font-medium hover:bg-violet-500/10 transition-colors">
+                        <i class="fa-solid fa-paste mr-1.5"></i> Paste Text Directly
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transcript Area -->
+            <div id="transcriptArea" class="hidden mb-6">
+                <div class="glass p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-file-lines mr-1.5"></i> Transcript
+                        </h3>
+                        <div class="flex gap-2">
+                            <button id="clearTranscriptBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium glass hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                                <i class="fa-solid fa-trash-can mr-1"></i> Clear
+                            </button>
+                            <button id="editTranscriptBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium glass hover:bg-violet-500/10 transition-colors">
+                                <i class="fa-solid fa-pen mr-1"></i> Edit
+                            </button>
+                        </div>
+                    </div>
+                    <div id="transcriptDisplay" class="text-sm leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap"></div>
+                    <textarea id="transcriptEdit" class="hidden w-full text-sm leading-relaxed bg-transparent border border-violet-500/30 rounded-lg p-3 min-h-[120px] resize-y focus:outline-none focus:border-violet-500"></textarea>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div id="actionArea" class="hidden flex flex-col sm:flex-row items-center gap-3 justify-center">
+                <button id="analyzeBtn"
+                    class="px-8 py-3.5 rounded-full bg-gradient-to-r from-violet-600 to-sky-500 text-white font-semibold shadow-lg shadow-violet-500/25 hover:scale-105 hover:shadow-xl hover:shadow-violet-500/30 transition-all text-base">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Analyze Lecture
+                </button>
+                <button id="sampleBtn"
+                    class="px-6 py-3.5 rounded-full glass font-medium hover:bg-violet-500/10 transition-colors text-sm">
+                    <i class="fa-solid fa-flask mr-1.5"></i> Try with Sample
+                </button>
+            </div>
+        </section>
+
+        <!-- Paste Modal -->
+        <div id="pasteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div class="glass p-6 w-full max-w-lg rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-lg">Paste Your Text</h3>
+                    <button id="closePasteModal" class="w-8 h-8 rounded-full glass flex items-center justify-center hover:bg-red-500/10 transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <textarea id="pasteTextarea" rows="10"
+                    class="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm leading-relaxed resize-none focus:outline-none focus:border-violet-500 transition-colors"
+                    placeholder="Paste your lecture notes, transcript, or any study material here..."></textarea>
+                <div class="flex justify-end gap-3 mt-4">
+                    <button id="cancelPaste" class="px-5 py-2.5 rounded-xl glass text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+                    <button id="confirmPaste" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-sky-500 text-white text-sm font-semibold hover:scale-105 transition-transform">Use This Text</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Section -->
+        <section id="processingSection" class="hidden section-fade mb-8">
+            <div class="glass p-8 sm:p-10 text-center max-w-lg mx-auto">
+                <div class="flex items-center justify-center gap-0 mb-8">
+                    <div class="flex flex-col items-center">
+                        <div id="step1" class="step-dot w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-white text-sm font-bold">1</div>
+                        <span class="text-xs mt-2 text-slate-400">Upload</span>
+                    </div>
+                    <div id="line1" class="h-0.5 w-16 sm:w-20 bg-slate-200 dark:bg-slate-700 -mt-5 relative overflow-hidden">
+                        <div id="line1fill" class="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-600 to-sky-500" style="width:0%"></div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div id="step2" class="step-dot w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-white text-sm font-bold">2</div>
+                        <span class="text-xs mt-2 text-slate-400">Transcribe</span>
+                    </div>
+                    <div id="line2" class="h-0.5 w-16 sm:w-20 bg-slate-200 dark:bg-slate-700 -mt-5 relative overflow-hidden">
+                        <div id="line2fill" class="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-600 to-sky-500" style="width:0%"></div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div id="step3" class="step-dot w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-white text-sm font-bold">3</div>
+                        <span class="text-xs mt-2 text-slate-400">Analyze</span>
+                    </div>
+                    <div id="line3" class="h-0.5 w-16 sm:w-20 bg-slate-200 dark:bg-slate-700 -mt-5 relative overflow-hidden">
+                        <div id="line3fill" class="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-600 to-sky-500" style="width:0%"></div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div id="step4" class="step-dot w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-white text-sm font-bold">4</div>
+                        <span class="text-xs mt-2 text-slate-400">Done</span>
+                    </div>
+                </div>
+                <div class="spinner mx-auto mb-4"></div>
+                <p id="processingText" class="text-sm text-slate-400">Preparing your lecture notes...</p>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="hidden section-fade">
+            <div class="glass p-5 sm:p-6">
+                <!-- Tabs + Actions -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <div id="tabsRow" class="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="tablist">
+                        <button class="tab-pill px-4 py-2 rounded-full text-sm font-medium active" data-tab="transcript" role="tab" aria-selected="true">
+                            <i class="fa-solid fa-file-lines mr-1.5"></i>Transcript
+                        </button>
+                        <button class="tab-pill px-4 py-2 rounded-full text-sm font-medium" data-tab="keypoints" role="tab" aria-selected="false">
+                            <i class="fa-solid fa-star mr-1.5"></i>Key Points
+                        </button>
+                        <button class="tab-pill px-4 py-2 rounded-full text-sm font-medium" data-tab="todo" role="tab" aria-selected="false">
+                            <i class="fa-solid fa-list-check mr-1.5"></i>To-Do
+                        </button>
+                        <button class="tab-pill px-4 py-2 rounded-full text-sm font-medium" data-tab="mcq" role="tab" aria-selected="false">
+                            <i class="fa-solid fa-circle-question mr-1.5"></i>MCQs
+                        </button>
+                        <button class="tab-pill px-4 py-2 rounded-full text-sm font-medium" data-tab="summary" role="tab" aria-selected="false">
+                            <i class="fa-solid fa-bolt mr-1.5"></i>Summary
+                        </button>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <button id="copyBtn" class="px-4 py-2 rounded-xl glass text-sm font-medium hover:bg-violet-500/10 transition-colors">
+                            <i class="fa-regular fa-copy mr-1.5"></i>Copy
+                        </button>
+                        <button id="pdfBtn" class="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-sky-500 text-white text-sm font-semibold hover:scale-105 transition-transform">
+                            <i class="fa-solid fa-file-pdf mr-1.5"></i>PDF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tabContent" class="min-h-[200px]">
+                    <!-- Dynamic content rendered here -->
+                </div>
+            </div>
+
+            <!-- New Recording -->
+            <div class="text-center mt-6">
+                <button id="newRecordingBtn" class="px-6 py-3 rounded-full glass font-medium hover:bg-violet-500/10 transition-colors text-sm">
+                    <i class="fa-solid fa-rotate-left mr-1.5"></i> New Recording
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-8 text-xs text-slate-400 dark:text-slate-600">
+        <p>EchoNote AI — 100% client-side. Your data never leaves your browser.</p>
+    </footer>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+    <script>
+    /* ============================================
+       STATE & CONSTANTS
+    ============================================ */
+    const state = {
+        darkMode: localStorage.getItem('echonote-dark') === 'true',
+        phase: 'idle', // idle | recording | transcribed | processing | results
+        transcript: '',
+        keyPoints: [],
+        todos: [],
+        mcqs: [],
+        summary: '',
+        currentTab: 'transcript',
+        recordingStart: 0,
+        timerInterval: null,
+        recognition: null,
+        mediaStream: null,
+        audioCtx: null,
+        analyser: null,
+        waveAnimFrame: null,
+    };
+
+    /* Sample lecture texts */
+    const SAMPLES = [
+        `Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize nutrients from carbon dioxide and water. Photosynthesis in plants generally involves the green pigment chlorophyll and generates oxygen as a by-product. The process of photosynthesis occurs in two main stages: the light-dependent reactions and the Calvin cycle. The light-dependent reactions take place in the thylakoid membranes and require a continuous supply of light energy. The Calvin cycle occurs in the stroma of the chloroplast and does not directly require light, which is why it is sometimes called the light-independent reactions. It is important to note that photosynthesis is crucial for life on Earth because it produces the oxygen that most organisms need to survive. The overall equation for photosynthesis is 6CO2 + 6H2O + light energy yields C6H12O6 + 6O2. Plants need to absorb light efficiently, which is why leaves have a large surface area and are arranged to maximize light exposure. You should remember that chlorophyll absorbs red and blue light most effectively, which is why plants appear green — they reflect green light. The rate of photosynthesis is affected by several factors including light intensity, carbon dioxide concentration, and temperature. It is essential to understand that without photosynthesis, the Earth's atmosphere would not contain enough oxygen to support aerobic life. Scientists have identified that certain plants, called C4 and CAM plants, have evolved special mechanisms to improve the efficiency of photosynthesis in hot and dry conditions. Make sure to study the differences between C3, C4, and CAM pathways as they are commonly tested. The light reactions produce ATP and NADPH, which are then used in the Calvin cycle to fix carbon dioxide into glucose. Remember to review the role of water as the electron donor in photosystem II.`,
+
+        `Data structures are fundamental building blocks in computer science that organize and store data efficiently for different operations. An array is a collection of elements stored at contiguous memory locations, allowing constant-time access by index but requiring linear time for insertion and deletion. A linked list consists of nodes where each node contains data and a reference to the next node, enabling efficient insertion and deletion but requiring sequential access. Stacks follow the Last-In-First-Out principle and are essential for function call management, expression evaluation, and undo operations. Queues follow the First-In-First-Out principle and are used in scheduling, breadth-first search, and buffering. Trees are hierarchical data structures with a root node and child nodes, and binary search trees allow efficient searching, insertion, and deletion in logarithmic time. Hash tables provide near-constant-time lookup by mapping keys to indices using a hash function, but collisions must be handled through chaining or open addressing. Graphs consist of vertices and edges, representing networks, social connections, and pathways, and can be traversed using depth-first search or breadth-first search. It is important to understand the time complexity of each operation for different data structures to choose the right one for a given problem. You should remember that choosing the wrong data structure can make your program inefficient by orders of magnitude. Heaps are specialized tree-based structures that satisfy the heap property and are commonly used to implement priority queues. Make sure to practice implementing these data structures from scratch, as understanding their internal workings is crucial for technical interviews. Red-Black trees and AVL trees are self-balancing binary search trees that maintain logarithmic height for guaranteed performance. Tries are tree-like structures optimized for string operations like autocomplete and spell checking.`,
+
+        `The Industrial Revolution was a period of major industrialization and innovation that took place during the late 1700s and early 1800s. The Revolution began in Great Britain and spread throughout the world, fundamentally transforming economies from agrarian to industrial. The textile industry was one of the first to be mechanized, with inventions like the spinning jenny, the water frame, and the power loom dramatically increasing production. The steam engine, improved by James Watt, was crucial for powering factories and transportation, leading to the expansion of railways and steamships. It is important to note that the Industrial Revolution caused massive social changes, including urbanization as people moved from rural areas to cities for factory work. Working conditions were often harsh, with long hours, low wages, and child labor being common. You should remember that the factory system replaced the domestic system of production, concentrating workers in large factories. The Revolution also led to the rise of capitalism and the emergence of a new middle class of factory owners and merchants. It is essential to understand the environmental impact, including pollution, deforestation, and resource depletion that accompanied industrialization. The labor movement emerged as workers organized to demand better conditions, leading to the formation of trade unions. Make sure to study the differences between the First Industrial Revolution (textiles, steam, iron) and the Second Industrial Revolution (steel, electricity, chemicals). The Revolution spread to continental Europe, the United States, and Japan at different rates, influenced by factors like resources, government policies, and existing infrastructure. Remember to review the role of the Enclosure Acts in Britain, which displaced small farmers and provided a labor force for factories.`
+    ];
+
+    /* ============================================
+       DOM REFERENCES
+    ============================================ */
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => document.querySelectorAll(sel);
+
+    const dom = {
+        themeToggle: $('#themeToggle'),
+        heroSection: $('#heroSection'),
+        inputSection: $('#inputSection'),
+        recordBtn: $('#recordBtn'),
+        recordTimer: $('#recordTimer'),
+        recordArea: $('#recordArea'),
+        recordingUI: $('#recordingUI'),
+        liveTimer: $('#liveTimer'),
+        stopBtn: $('#stopBtn'),
+        waveCanvas: $('#waveCanvas'),
+        speechSupport: $('#speechSupport'),
+        uploadZone: $('#uploadZone'),
+        fileInput: $('#fileInput'),
+        pasteBtn: $('#pasteBtn'),
+        transcriptArea: $('#transcriptArea'),
+        transcriptDisplay: $('#transcriptDisplay'),
+        transcriptEdit: $('#transcriptEdit'),
+        clearTranscriptBtn: $('#clearTranscriptBtn'),
+        editTranscriptBtn: $('#editTranscriptBtn'),
+        actionArea: $('#actionArea'),
+        analyzeBtn: $('#analyzeBtn'),
+        sampleBtn: $('#sampleBtn'),
+        pasteModal: $('#pasteModal'),
+        pasteTextarea: $('#pasteTextarea'),
+        closePasteModal: $('#closePasteModal'),
+        cancelPaste: $('#cancelPaste'),
+        confirmPaste: $('#confirmPaste'),
+        processingSection: $('#processingSection'),
+        processingText: $('#processingText'),
+        resultsSection: $('#resultsSection'),
+        tabsRow: $('#tabsRow'),
+        tabContent: $('#tabContent'),
+        copyBtn: $('#copyBtn'),
+        pdfBtn: $('#pdfBtn'),
+        newRecordingBtn: $('#newRecordingBtn'),
+        toastContainer: $('#toastContainer'),
+    };
+
+    /* ============================================
+       THEME
+    ============================================ */
+    function applyTheme() {
+        document.documentElement.classList.toggle('dark', state.darkMode);
+        localStorage.setItem('echonote-dark', state.darkMode);
+    }
+    applyTheme();
+
+    dom.themeToggle.addEventListener('click', () => {
+        state.darkMode = !state.darkMode;
+        applyTheme();
+    });
+
+    /* ============================================
+       TOAST
+    ============================================ */
+    function showToast(msg, type = 'info') {
+        const colors = {
+            info: 'from-violet-600 to-sky-500',
+            success: 'from-emerald-500 to-teal-500',
+            error: 'from-red-500 to-orange-500',
+        };
+        const el = document.createElement('div');
+        el.className = `toast glass px-5 py-3 rounded-xl text-sm font-medium text-white bg-gradient-to-r ${colors[type]} shadow-lg`;
+        el.textContent = msg;
+        dom.toastContainer.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    /* ============================================
+       SPEECH RECOGNITION SETUP
+    ============================================ */
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let hasSpeechSupport = !!SpeechRecognition;
+
+    if (!hasSpeechSupport) {
+        dom.speechSupport.classList.remove('hidden');
+        dom.speechSupport.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-amber-400"></i> Speech recognition not supported in this browser. Please paste text or upload a file.';
+    }
+
+    /* ============================================
+       RECORDING
+    ============================================ */
+    dom.recordBtn.addEventListener('click', startRecording);
+    dom.stopBtn.addEventListener('click', stopRecording);
+
+    function startRecording() {
+        if (!hasSpeechSupport) {
+            showToast('Speech recognition not supported. Please paste text instead.', 'error');
+            return;
+        }
+
+        state.recognition = new SpeechRecognition();
+        state.recognition.continuous = true;
+        state.recognition.interimResults = true;
+        state.recognition.lang = 'en-US';
+
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        state.recognition.onresult = (event) => {
+            interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript + ' ';
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            state.transcript = finalTranscript + interimTranscript;
+            updateTranscriptDisplay();
+        };
+
+        state.recognition.onerror = (event) => {
+            if (event.error === 'no-speech') return;
+            console.error('Speech recognition error:', event.error);
+            showToast('Recording error: ' + event.error, 'error');
+            stopRecording();
+        };
+
+        state.recognition.onend = () => {
+            /* Auto-restart if still in recording phase */
+            if (state.phase === 'recording') {
+                try { state.recognition.start(); } catch(e) {}
+            }
+        };
+
+        state.recognition.start();
+        state.phase = 'recording';
+        state.recordingStart = Date.now();
+
+        /* UI update */
+        dom.recordArea.classList.add('hidden');
+        dom.recordingUI.classList.remove('hidden');
+        dom.heroSection.classList.add('hidden');
+
+        /* Timer */
+        state.timerInterval = setInterval(updateLiveTimer, 1000);
+
+        /* Audio visualization */
+        startAudioVisualization();
+
+        showToast('Recording started. Speak clearly.', 'info');
+    }
+
+    function stopRecording() {
+        if (state.recognition) {
+            state.recognition.onend = null;
+            state.recognition.stop();
+        }
+
+        clearInterval(state.timerInterval);
+        cancelAnimationFrame(state.waveAnimFrame);
+
+        if (state.mediaStream) {
+            state.mediaStream.getTracks().forEach(t => t.stop());
+            state.mediaStream = null;
+        }
+        if (state.audioCtx) {
+            state.audioCtx.close();
+            state.audioCtx = null;
+        }
+
+        state.phase = state.transcript.trim() ? 'transcribed' : 'idle';
+
+        dom.recordArea.classList.remove('hidden');
+        dom.recordingUI.classList.add('hidden');
+        dom.recordBtn.classList.remove('rec-pulse');
+
+        if (state.transcript.trim()) {
+            updateTranscriptDisplay();
+            showTranscriptArea();
+            showToast('Recording complete!', 'success');
+        } else {
+            showToast('No speech detected. Try again or paste text.', 'error');
+        }
+    }
+
+    function updateLiveTimer() {
+        const elapsed = Math.floor((Date.now() - state.recordingStart) / 1000);
+        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const s = String(elapsed % 60).padStart(2, '0');
+        dom.liveTimer.textContent = `${m}:${s}`;
+    }
+
+    function updateTranscriptDisplay() {
+        dom.transcriptDisplay.textContent = state.transcript || 'Listening...';
+    }
+
+    /* Audio waveform visualization */
+    async function startAudioVisualization() {
+        try {
+            state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = state.audioCtx.createMediaStreamSource(state.mediaStream);
+            state.analyser = state.audioCtx.createAnalyser();
+            state.analyser.fftSize = 256;
+            source.connect(state.analyser);
+
+            const canvas = dom.waveCanvas;
+            const ctx = canvas.getContext('2d');
+            const bufferLength = state.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function draw() {
+                state.waveAnimFrame = requestAnimationFrame(draw);
+                state.analyser.getByteFrequencyData(dataArray);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = Math.max(2, (canvas.width / bufferLength) * 2.5);
+                let x = 0;
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                gradient.addColorStop(0, '#7C3AED');
+                gradient.addColorStop(1, '#0EA5E9');
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = Math.max(2, (dataArray[i] / 255) * canvas.height);
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.roundRect(x, canvas.height - barHeight, barWidth - 1, barHeight, 2);
+                    ctx.fill();
+                    x += barWidth;
+                    if (x > canvas.width) break;
+                }
+            }
+            draw();
+        } catch (e) {
+            console.warn('Audio visualization not available:', e);
+        }
+    }
+
+    /* ============================================
+       FILE UPLOAD
+    ============================================ */
+    dom.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        readFile(file);
+    });
+
+    dom.uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dom.uploadZone.classList.add('drag-over');
+    });
+    dom.uploadZone.addEventListener('dragleave', () => {
+        dom.uploadZone.classList.remove('drag-over');
+    });
+    dom.uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dom.uploadZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) readFile(file);
+    });
+
+    function readFile(file) {
+        if (!file.name.endsWith('.txt') && file.type !== 'text/plain') {
+            showToast('Please upload a .txt file', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            state.transcript = e.target.result;
+            state.phase = 'transcribed';
+            updateTranscriptDisplay();
+            showTranscriptArea();
+            showToast('File loaded successfully!', 'success');
+        };
+        reader.readAsText(file);
+    }
+
+    /* ============================================
+       PASTE TEXT
+    ============================================ */
+    dom.pasteBtn.addEventListener('click', () => {
+        dom.pasteModal.classList.remove('hidden');
+        dom.pasteTextarea.value = '';
+        dom.pasteTextarea.focus();
+    });
+    dom.closePasteModal.addEventListener('click', () => dom.pasteModal.classList.add('hidden'));
+    dom.cancelPaste.addEventListener('click', () => dom.pasteModal.classList.add('hidden'));
+    dom.confirmPaste.addEventListener('click', () => {
+        const text = dom.pasteTextarea.value.trim();
+        if (!text) {
+            showToast('Please enter some text', 'error');
+            return;
+        }
+        state.transcript = text;
+        state.phase = 'transcribed';
+        updateTranscriptDisplay();
+        showTranscriptArea();
+        dom.pasteModal.classList.add('hidden');
+        showToast('Text loaded!', 'success');
+    });
+
+    /* Close modal on backdrop click */
+    dom.pasteModal.addEventListener('click', (e) => {
+        if (e.target === dom.pasteModal) dom.pasteModal.classList.add('hidden');
+    });
+
+    /* ============================================
+       TRANSCRIPT AREA
+    ============================================ */
+    function showTranscriptArea() {
+        dom.transcriptArea.classList.remove('hidden');
+        dom.actionArea.classList.remove('hidden');
+        dom.heroSection.classList.add('hidden');
+    }
+
+    dom.clearTranscriptBtn.addEventListener('click', () => {
+        state.transcript = '';
+        state.phase = 'idle';
+        dom.transcriptArea.classList.add('hidden');
+        dom.actionArea.classList.add('hidden');
+        dom.heroSection.classList.remove('hidden');
+        dom.transcriptEdit.classList.add('hidden');
+        dom.transcriptDisplay.classList.remove('hidden');
+        dom.editTranscriptBtn.innerHTML = '<i class="fa-solid fa-pen mr-1"></i> Edit';
+    });
+
+    dom.editTranscriptBtn.addEventListener('click', () => {
+        const isEditing = !dom.transcriptEdit.classList.contains('hidden');
+        if (isEditing) {
+            /* Save edit */
+            state.transcript = dom.transcriptEdit.value;
+            dom.transcriptDisplay.textContent = state.transcript;
+            dom.transcriptEdit.classList.add('hidden');
+            dom.transcriptDisplay.classList.remove('hidden');
+            dom.editTranscriptBtn.innerHTML = '<i class="fa-solid fa-pen mr-1"></i> Edit';
+        } else {
+            /* Enter edit mode */
+            dom.transcriptEdit.value = state.transcript;
+            dom.transcriptEdit.classList.remove('hidden');
+            dom.transcriptDisplay.classList.add('hidden');
+            dom.transcriptEdit.focus();
+            dom.editTranscriptBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Save';
+        }
+    });
+
+    /* ============================================
+       SAMPLE TEXT
+    ============================================ */
+    dom.sampleBtn.addEventListener('click', () => {
+        const sample = SAMPLES[Math.floor(Math.random() * SAMPLES.length)];
+        state.transcript = sample;
+        state.phase = 'transcribed';
+        updateTranscriptDisplay();
+        showTranscriptArea();
+        showToast('Sample lecture loaded!', 'success');
+    });
+
+    /* ============================================
+       ANALYSIS — MAIN PIPELINE
+    ============================================ */
+    dom.analyzeBtn.addEventListener('click', () => {
+        if (!state.transcript.trim()) {
+            showToast('No transcript to analyze', 'error');
+            return;
+        }
+        runAnalysis();
+    });
+
+    async function runAnalysis() {
+        state.phase = 'processing';
+
+        /* Show processing, hide input */
+        dom.inputSection.classList.add('hidden');
+        dom.processingSection.classList.remove('hidden');
+        dom.resultsSection.classList.add('hidden');
+
+        const steps = [
+            { step: 1, text: 'Uploading transcript...', delay: 600 },
+            { step: 2, text: 'Transcribing content...', delay: 800 },
+            { step: 3, text: 'Analyzing with AI...', delay: 1200 },
+            { step: 4, text: 'Done!', delay: 400 },
+        ];
+
+        for (let i = 0; i < steps.length; i++) {
+            const s = steps[i];
+            dom.processingText.textContent = s.text;
+
+            /* Update step dots */
+            for (let j = 1; j <= 4; j++) {
+                const dot = $(`#step${j}`);
+                dot.classList.remove('active', 'done');
+                if (j < s.step) dot.classList.add('done');
+                else if (j === s.step) dot.classList.add('active');
+            }
+
+            /* Update progress lines */
+            for (let j = 1; j <= 3; j++) {
+                const fill = $(`#line${j}fill`);
+                if (j < s.step) fill.style.width = '100%';
+                else if (j === s.step) fill.style.width = '50%';
+                else fill.style.width = '0%';
+            }
+
+            /* Run actual NLP at step 3 */
+            if (s.step === 3) {
+                await new Promise(resolve => {
+                    setTimeout(() => {
+                        state.keyPoints = extractKeyPoints(state.transcript);
+                        state.todos = extractTodos(state.transcript);
+                        state.mcqs = generateMCQs(state.transcript);
+                        state.summary = generateSummary(state.transcript);
+                        resolve();
+                    }, 100);
+                });
+            }
+
+            await new Promise(r => setTimeout(r, s.delay));
+        }
+
+        /* Final step: all done */
+        for (let j = 1; j <= 4; j++) {
+            $(`#step${j}`).classList.remove('active');
+            $(`#step${j}`).classList.add('done');
+        }
+        for (let j = 1; j <= 3; j++) {
+            $(`#line${j}fill`).style.width = '100%';
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+
+        /* Show results */
+        state.phase = 'results';
+        state.currentTab = 'transcript';
+        dom.processingSection.classList.add('hidden');
+        dom.resultsSection.classList.remove('hidden');
+        renderResults();
+        showToast('Analysis complete!', 'success');
+    }
+
+    /* ============================================
+       NLP — KEY POINTS
+    ============================================ */
+    function extractKeyPoints(text) {
+        const sentences = splitSentences(text);
+        if (sentences.length === 0) return [];
+
+        const stopWords = new Set(['the','a','an','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','shall','can','need','to','of','in','for','on','with','at','by','from','as','into','through','during','before','after','above','below','between','out','off','over','under','again','further','then','once','here','there','when','where','why','how','all','each','every','both','few','more','most','other','some','such','no','nor','not','only','own','same','so','than','too','very','just','because','but','and','or','if','while','that','this','these','those','it','its','they','them','their','we','our','you','your','he','she','him','her','his','i','me','my','which','what','who','whom','whose','also','about','up','down','any']);
+
+        /* Word frequency */
+        const wordFreq = {};
+        const words = text.split(/\s+/);
+        words.forEach(w => {
+            const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            if (clean.length > 3 && !stopWords.has(clean)) {
+                wordFreq[clean] = (wordFreq[clean] || 0) + 1;
+            }
+        });
+
+        /* Score sentences */
+        const scored = sentences.map((s, i) => {
+            let score = 0;
+
+            /* Signal words */
+            const signalWords = ['important','key','significant','crucial','essential','note','remember','main','primary','fundamental','critical','vital','notably','therefore','consequently','thus','hence','conclusion','result','because','since','define','defined','means'];
+            signalWords.forEach(w => {
+                if (s.toLowerCase().includes(' ' + w)) score += 3;
+            });
+
+            /* Contains numbers/data */
+            if (/\d+/.test(s)) score += 2;
+
+            /* Contains capitalized terms */
+            const caps = s.match(/\b[A-Z][a-z]{3,}\b/g);
+            if (caps) score += Math.min(caps.length, 3);
+
+            /* Word frequency score */
+            const sWords = s.split(/\s+/);
+            sWords.forEach(w => {
+                const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+                if (wordFreq[clean]) score += wordFreq[clean] * 0.1;
+            });
+
+            /* Position */
+            if (i < 2) score += 2;
+            if (i >= sentences.length - 2) score += 1.5;
+
+            /* Length: prefer medium sentences */
+            const wc = sWords.length;
+            if (wc > 5 && wc < 35) score += 1;
+            if (wc < 4) score -= 2;
+
+            /* Not a question */
+            if (!s.includes('?')) score += 0.5;
+
+            return { text: s.trim(), score };
+        });
+
+        /* Remove near-duplicates */
+        const seen = new Set();
+        const unique = scored.filter(s => {
+            const key = s.text.toLowerCase().slice(0, 40);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        unique.sort((a, b) => b.score - a.score);
+        return unique.slice(0, 10).map(s => s.text);
+    }
+
+    /* ============================================
+       NLP — TO-DO
+    ============================================ */
+    function extractTodos(text) {
+        const sentences = splitSentences(text);
+        const todos = [];
+
+        /* Pattern-based extraction */
+        const patterns = [
+            /need\s+to\s+(.+?)(?:\.|!|;|$)/i,
+            /should\s+(.+?)(?:\.|!|;|$)/i,
+            /must\s+(.+?)(?:\.|!|;|$)/i,
+            /have\s+to\s+(.+?)(?:\.|!|;|$)/i,
+            /remember\s+to\s+(.+?)(?:\.|!|;|$)/i,
+            /make\s+sure\s+(?:to\s+)?(.+?)(?:\.|!|;|$)/i,
+            /don't\s+forget\s+(?:to\s+)?(.+?)(?:\.|!|;|$)/i,
+            /be\s+sure\s+(?:to\s+)?(.+?)(?:\.|!|;|$)/i,
+            /it\s+is\s+(?:important|essential|crucial|vital)\s+(?:to\s+)?(?:understand|note|remember|know)\s+(?:that\s+)?(.+?)(?:\.|!|;|$)/i,
+        ];
+
+        sentences.forEach(s => {
+            patterns.forEach(p => {
+                const m = s.match(p);
+                if (m && m[1] && m[1].trim().length > 5) {
+                    let todo = m[1].trim();
+                    /* Clean up trailing punctuation */
+                    todo = todo.replace(/[.;!,]+$/, '');
+                    todos.push(capitalize(todo));
+                }
+            });
+        });
+
+        /* If not enough todos, generate study tasks from key terms */
+        if (todos.length < 3) {
+            const keyTerms = extractKeyTerms(text);
+            keyTerms.slice(0, 5).forEach(term => {
+                todos.push(`Review and understand the concept of ${term}`);
+            });
+            todos.push('Summarize the main points in your own words');
+            todos.push('Create flashcards for key terms and definitions');
+            todos.push('Practice explaining the topic to someone else');
+        }
+
+        /* Deduplicate */
+        const unique = [...new Set(todos.map(t => t.toLowerCase()))];
+        return unique.slice(0, 8).map(t => capitalize(t));
+    }
+
+    /* ============================================
+       NLP — MCQ GENERATION
+    ============================================ */
+    function generateMCQs(text) {
+        const sentences = splitSentences(text);
+        const keyTerms = extractKeyTerms(text);
+        const mcqs = [];
+
+        /* Strategy 1: Definition-based questions */
+        sentences.forEach(s => {
+            if (mcqs.length >= 10) return;
+            const defMatch = s.match(/^(.+?)\s+(?:is|are|refers?\s+to|means?|can\s+be\s+defined\s+as)\s+(.+?)[.]$/i);
+            if (defMatch) {
+                const term = defMatch[1].trim();
+                const definition = defMatch[2].trim();
+                if (term.split(/\s+/).length <= 5 && definition.length > 10) {
+                    const distractors = keyTerms
+                        .filter(t => t.toLowerCase() !== term.toLowerCase())
+                        .sort(() => Math.random() - 0.5)
+                        .slice(0, 3);
+
+                    if (distractors.length >= 3) {
+                        const options = [definition, ...distractors.map(d => `The concept related to ${d}`)].sort(() => Math.random() - 0.5);
+                        mcqs.push({
+                            question: `What is ${term}?`,
+                            options,
+                            answer: definition
+                        });
+                    }
+                }
+            }
+        });
+
+        /* Strategy 2: Fill-in-the-blank */
+        const usedTerms = new Set(mcqs.map(m => m.answer.toLowerCase()));
+        keyTerms.forEach(term => {
+            if (mcqs.length >= 10) return;
+            if (usedTerms.has(term.toLowerCase())) return;
+
+            const sentence = sentences.find(s =>
+                s.toLowerCase().includes(term.toLowerCase()) && s.split(/\s+/).length > 6
+            );
+            if (!sentence) return;
+
+            const blanked = sentence.replace(new RegExp('\\b' + escapeRegex(term) + '\\b', 'i'), '________');
+            const distractors = keyTerms
+                .filter(t => t.toLowerCase() !== term.toLowerCase() && t.length > 2)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3);
+
+            if (distractors.length >= 3) {
+                const options = [term, ...distractors].sort(() => Math.random() - 0.5);
+                mcqs.push({
+                    question: `Complete: ${blanked.trim()}`,
+                    options,
+                    answer: term
+                });
+                usedTerms.add(term.toLowerCase());
+            }
+        });
+
+        /* Strategy 3: True/False style as MCQ */
+        if (mcqs.length < 10) {
+            const factualSentences = sentences.filter(s => {
+                const wc = s.split(/\s+/).length;
+                return wc > 8 && wc < 30 && !s.includes('?') && /\b(is|are|was|were|has|have|can|does)\b/i.test(s);
+            });
+
+            factualSentences.slice(0, 10 - mcqs.length).forEach(s => {
+                /* Create a slight variation as wrong answer */
+                const wrongVariation = s.replace(/\b(all|every|always|only|never|none|no\s+one)\b/i, (match) => {
+                    const opposites = { 'all': 'no', 'every': 'no', 'always': 'never', 'only': 'all', 'never': 'always', 'none': 'all', 'no one': 'everyone' };
+                    return opposites[match.toLowerCase()] || 'some';
+                });
+
+                if (wrongVariation !== s) {
+                    const options = [s.trim(), wrongVariation.trim(), 'Both are correct', 'Neither is correct'].sort(() => Math.random() - 0.5);
+                    mcqs.push({
+                        question: 'Which statement is correct?',
+                        options,
+                        answer: s.trim()
+                    });
+                } else {
+                    /* Replace a key word with a wrong one */
+                    const words = s.split(/\s+/);
+                    const contentWordIdx = words.findIndex((w, i) => i > 2 && w.length > 4 && /^[a-zA-Z]+$/.test(w));
+                    if (contentWordIdx > -1) {
+                        const wrongSentence = [...words];
+                        wrongSentence[contentWordIdx] = 'incorrectly';
+                        const options = [s.trim(), wrongSentence.join(' '), 'Both are correct', 'Neither is correct'].sort(() => Math.random() - 0.5);
+                        mcqs.push({
+                            question: 'Which statement is correct?',
+                            options,
+                            answer: s.trim()
+                        });
+                    }
+                }
+            });
+        }
+
+        return mcqs.slice(0, 10);
+    }
+
+    /* ============================================
+       NLP — SUMMARY
+    ============================================ */
+    function generateSummary(text) {
+        const sentences = splitSentences(text);
+        if (sentences.length <= 3) return text;
+
+        const keyPoints = extractKeyPoints(text);
+        /* Take top key point sentences and order by original position */
+        const keyTexts = new Set(keyPoints.slice(0, 5).map(k => k.toLowerCase().trim()));
+
+        const summarySentences = sentences.filter(s => keyTexts.has(s.toLowerCase().trim()));
+        if (summarySentences.length === 0) {
+            /* Fallback: take first 3 sentences */
+            return sentences.slice(0, 3).join(' ');
+        }
+
+        return summarySentences.join(' ');
+    }
+
+    /* ============================================
+       NLP — UTILITY FUNCTIONS
+    ============================================ */
+    function splitSentences(text) {
+        /* Split on sentence boundaries but keep the delimiter */
+        const raw = text.match(/[^.!?]+[.!?]+/g) || [text];
+        return raw.map(s => s.trim()).filter(s => s.length > 5);
+    }
+
+    function extractKeyTerms(text) {
+        const stopWords = new Set(['the','a','an','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','shall','can','need','to','of','in','for','on','with','at','by','from','as','into','through','during','before','after','above','below','between','out','off','over','under','again','further','then','once','here','there','when','where','why','how','all','each','every','both','few','more','most','other','some','such','no','nor','not','only','own','same','so','than','too','very','just','because','but','and','or','if','while','that','this','these','those','it','its','they','them','their','we','our','you','your','he','she','him','her','his','i','me','my','which','what','who','whom','whose','also','about','up','down','any','called','which','where','what','when','that','this','these','those','been','being','having','doing','going','using','making','taking','getting','giving','called','known','including','following','according','based','related','involving','requiring','allowing','providing','containing','representing','depending','consisting','operating','functioning']);
+
+        const words = text.split(/\s+/);
+        const termFreq = {};
+
+        /* Single word terms */
+        words.forEach(w => {
+            const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            if (clean.length > 3 && !stopWords.has(clean)) {
+                termFreq[clean] = (termFreq[clean] || 0) + 1;
+            }
+        });
+
+        /* Multi-word terms (capitalized sequences) */
+        const multiWordTerms = text.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+/g) || [];
+        multiWordTerms.forEach(t => {
+            termFreq[t] = (termFreq[t] || 0) + 5;
+        });
+
+        /* Sort by frequency, return top terms */
+        return Object.entries(termFreq)
+            .sort((a, b) => b[1] - a[1])
+            .map(e => e[0])
+            .filter(t => t.length > 3)
+            .slice(0, 25);
+    }
+
+    function capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /* ============================================
+       RESULTS RENDERING
+    ============================================ */
+    function renderResults() {
+        updateTabPills();
+        renderTabContent();
+    }
+
+    function updateTabPills() {
+        dom.tabsRow.querySelectorAll('.tab-pill').forEach(btn => {
+            const isActive = btn.dataset.tab === state.currentTab;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', isActive);
+        });
+    }
+
+    function renderTabContent() {
+        let html = '';
+
+        switch (state.currentTab) {
+            case 'transcript':
+                html = `<div class="prose dark:prose-invert max-w-none">
+                    <p class="text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(state.transcript)}</p>
+                </div>`;
+                break;
+
+            case 'keypoints':
+                if (state.keyPoints.length === 0) {
+                    html = '<p class="text-sm text-slate-400">No key points extracted.</p>';
+                } else {
+                    html = '<div class="space-y-3">';
+                    state.keyPoints.forEach((point, i) => {
+                        html += `<div class="flex gap-3 items-start p-3 rounded-xl glass">
+                            <span class="shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-sky-500 text-white text-xs font-bold flex items-center justify-center">${i + 1}</span>
+                            <p class="text-sm leading-relaxed">${escapeHtml(point)}</p>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                break;
+
+            case 'todo':
+                if (state.todos.length === 0) {
+                    html = '<p class="text-sm text-slate-400">No to-do items generated.</p>';
+                } else {
+                    html = '<div class="space-y-2.5">';
+                    state.todos.forEach((todo, i) => {
+                        html += `<label class="flex items-center gap-3 p-3 rounded-xl glass cursor-pointer hover:bg-violet-500/5 transition-colors">
+                            <input type="checkbox" class="todo-check w-5 h-5 rounded accent-violet-600 shrink-0">
+                            <span class="todo-text text-sm leading-relaxed transition-all">${escapeHtml(todo)}</span>
+                        </label>`;
+                    });
+                    html += '</div>';
+                }
+                break;
+
+            case 'mcq':
+                if (state.mcqs.length === 0) {
+                    html = '<p class="text-sm text-slate-400">No MCQs generated.</p>';
+                } else {
+                    html = '<div class="space-y-6">';
+                    state.mcqs.forEach((mcq, qi) => {
+                        html += `<div class="glass p-4 rounded-xl">
+                            <p class="text-sm font-semibold mb-3"><span class="text-violet-500 mr-1.5">Q${qi + 1}.</span> ${escapeHtml(mcq.question)}</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">`;
+                        mcq.options.forEach((opt, oi) => {
+                            html += `<button class="mcq-option text-left p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm hover:border-violet-400 transition-all"
+                                data-q="${qi}" data-o="${oi}" data-correct="${escapeHtml(mcq.answer)}" data-this="${escapeHtml(opt)}">
+                                <span class="font-medium text-violet-500 mr-1.5">${String.fromCharCode(65 + oi)}.</span> ${escapeHtml(opt)}
+                            </button>`;
+                        });
+                        html += `</div></div>`;
+                    });
+                    html += '</div>';
+                }
+                break;
+
+            case 'summary':
+                html = `<div class="glass p-5 rounded-xl">
+                    <div class="inline-block mb-3 px-3 py-1 rounded-full bg-gradient-to-r from-violet-600/20 to-sky-500/20 text-xs font-semibold">
+                        <i class="fa-solid fa-bolt mr-1"></i> 60-Second Summary
+                    </div>
+                    <p class="text-sm leading-relaxed">${escapeHtml(state.summary)}</p>
+                </div>`;
+                break;
+        }
+
+        dom.tabContent.innerHTML = html;
+
+        /* Attach MCQ event listeners */
+        if (state.currentTab === 'mcq') {
+            dom.tabContent.querySelectorAll('.mcq-option').forEach(btn => {
+                btn.addEventListener('click', handleMCQClick);
+            });
+        }
+    }
+
+    function handleMCQClick(e) {
+        const btn = e.currentTarget;
+        const qIdx = parseInt(btn.dataset.q);
+        const isCorrect = btn.dataset.this === btn.dataset.correct;
+
+        /* Mark all options in this question */
+        const siblings = dom.tabContent.querySelectorAll(`[data-q="${qIdx}"]`);
+        siblings.forEach(sib => {
+            sib.classList.add('picked');
+            if (sib.dataset.this === sib.dataset.correct) {
+                sib.classList.add('correct');
+            } else if (sib === btn && !isCorrect) {
+                sib.classList.add('wrong');
+            }
+        });
+
+        showToast(isCorrect ? 'Correct!' : 'Incorrect — see the green answer', isCorrect ? 'success' : 'error');
+    }
+
+    /* Tab switching */
+    dom.tabsRow.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab-pill');
+        if (!btn) return;
+        state.currentTab = btn.dataset.tab;
+        updateTabPills();
+        renderTabContent();
+    });
+
+    /* ============================================
+       COPY
+    ============================================ */
+    dom.copyBtn.addEventListener('click', () => {
+        let text = '';
+        switch (state.currentTab) {
+            case 'transcript': text = state.transcript; break;
+            case 'keypoints': text = state.keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n'); break;
+            case 'todo': text = state.todos.map((t, i) => `${i + 1}. [ ] ${t}`).join('\n'); break;
+            case 'mcq': text = state.mcqs.map((m, i) => `Q${i + 1}. ${m.question}\n${m.options.map((o, j) => `  ${String.fromCharCode(65 + j)}. ${o}${o === m.answer ? ' ✓' : ''}`).join('\n')}`).join('\n\n'); break;
+            case 'summary': text = state.summary; break;
+        }
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Copied to clipboard!', 'success');
+        }).catch(() => {
+            /* Fallback */
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('Copied to clipboard!', 'success');
+        });
+    });
+
+    /* ============================================
+       PDF EXPORT
+    ============================================ */
+    dom.pdfBtn.addEventListener('click', () => {
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            const maxWidth = pageWidth - margin * 2;
+            let y = 20;
+
+            /* Title */
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            doc.text('EchoNote AI', margin, y);
+            y += 8;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100);
+            doc.text('Record once. Learn smarter.', margin, y);
+            y += 10;
+            doc.setDrawColor(124, 58, 237);
+            doc.setLineWidth(0.5);
+            doc.line(margin, y, pageWidth - margin, y);
+            y += 8;
+
+            /* Helper */
+            function addSection(title, content) {
+                if (y > 260) { doc.addPage(); y = 20; }
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(40);
+                doc.text(title, margin, y);
+                y += 7;
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(60);
+
+                if (Array.isArray(content)) {
+                    content.forEach((item, i) => {
+                        if (y > 270) { doc.addPage(); y = 20; }
+                        const lines = doc.splitTextToSize(`${i + 1}. ${item}`, maxWidth - 5);
+                        doc.text(lines, margin + 3, y);
+                        y += lines.length * 5 + 2;
+                    });
+                } else {
+                    const lines = doc.splitTextToSize(content, maxWidth);
+                    doc.text(lines, margin, y);
+                    y += lines.length * 5 + 2;
+                }
+                y += 5;
+            }
+
+            /* Transcript */
+            addSection('Transcript', state.transcript);
+
+            /* Key Points */
+            addSection('Key Points', state.keyPoints);
+
+            /* To-Do */
+            addSection('To-Do Checklist', state.todos.map(t => `[ ] ${t}`));
+
+            /* MCQs */
+            if (y > 200) { doc.addPage(); y = 20; }
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(40);
+            doc.text('MCQs', margin, y);
+            y += 7;
+            state.mcqs.forEach((mcq, i) => {
+                if (y > 260) { doc.addPage(); y = 20; }
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(60);
+                const qLines = doc.splitTextToSize(`Q${i + 1}. ${mcq.question}`, maxWidth);
+                doc.text(qLines, margin, y);
+                y += qLines.length * 5;
+                doc.setFont('helvetica', 'normal');
+                mcq.options.forEach((opt, j) => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                    const prefix = String.fromCharCode(65 + j);
+                    const marker = opt === mcq.answer ? ' *' : '';
+                    const oLines = doc.splitTextToSize(`  ${prefix}. ${opt}${marker}`, maxWidth - 5);
+                    doc.text(oLines, margin + 3, y);
+                    y += oLines.length * 5;
+                });
+                y += 3;
+            });
+
+            /* Summary */
+            addSection('60-Second Summary', state.summary);
+
+            /* Footer */
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text(`EchoNote AI — Page ${i} of ${pageCount}`, margin, doc.internal.pageSize.getHeight() - 10);
+            }
+
+            doc.save('echonote-ai-notes.pdf');
+            showToast('PDF downloaded!', 'success');
+        } catch (e) {
+            console.error('PDF error:', e);
+            showToast('PDF generation failed. Please try again.', 'error');
+        }
+    });
+
+    /* ============================================
+       NEW RECORDING
+    ============================================ */
+    dom.newRecordingBtn.addEventListener('click', () => {
+        state.phase = 'idle';
+        state.transcript = '';
+        state.keyPoints = [];
+        state.todos = [];
+        state.mcqs = [];
+        state.summary = '';
+        state.currentTab = 'transcript';
+
+        dom.resultsSection.classList.add('hidden');
+        dom.processingSection.classList.add('hidden');
+        dom.inputSection.classList.remove('hidden');
+        dom.heroSection.classList.remove('hidden');
+        dom.transcriptArea.classList.add('hidden');
+        dom.actionArea.classList.add('hidden');
+        dom.transcriptEdit.classList.add('hidden');
+        dom.transcriptDisplay.classList.remove('hidden');
+        dom.editTranscriptBtn.innerHTML = '<i class="fa-solid fa-pen mr-1"></i> Edit';
+        dom.recordBtn.classList.add('rec-pulse');
+
+        /* Reset processing steps */
+        for (let j = 1; j <= 4; j++) {
+            $(`#step${j}`).classList.remove('active', 'done');
+        }
+        for (let j = 1; j <= 3; j++) {
+            $(`#line${j}fill`).style.width = '0%';
+        }
+    });
+
+    /* ============================================
+       UTILITY
+    ============================================ */
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    /* ============================================
+       KEYBOARD SHORTCUTS
+    ============================================ */
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            dom.pasteModal.classList.add('hidden');
+        }
+    });
+
+    /* ============================================
+       INIT
+    ============================================ */
+    (function init() {
+        /* Check speech support */
+        if (!hasSpeechSupport) {
+            dom.recordBtn.classList.remove('rec-pulse');
+            dom.recordBtn.classList.add('opacity-50');
+            dom.recordBtn.disabled = true;
+            dom.recordTimer.textContent = 'Not supported in this browser';
+        }
+    })();
+    </script>
+</body>
+</html>
